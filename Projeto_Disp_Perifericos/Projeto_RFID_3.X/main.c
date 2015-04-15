@@ -19,6 +19,11 @@
 
 #define TRIS_LED1 TRISBbits.TRISB3
 #define LED1 PORTBbits.RB3
+#define TRIS_BUTTON TRISBbits.TRISB4
+#define BUTTON PORTBbits.RB4
+#define TRIS_OUTPUT1 TRISBbits.TRISB0
+#define OUTPUT1 PORTBbits.RB0
+
 
 //******************************************************************************/
 #define MFRC522_CS PORTAbits.RA1
@@ -121,28 +126,27 @@
 #define     RESERVED32            0x3D
 #define     RESERVED33            0x3E
 #define     RESERVED34            0x3F
-static void MFRC522_Wr( char addr, char value )
+void MFRC522_Wr( char addr, char value )
 {
   MFRC522_CS = 0;
   SPI_transfer( ( addr << 1 ) & 0x7E );
   SPI_transfer( value );
   MFRC522_CS = 1;
 }
-static char MFRC522_Rd( char addr )
+char MFRC522_Rd( char addr )
 {
   char value;
   MFRC522_CS = 0;
   SPI_transfer( (( addr << 1 ) & 0x7E) | 0x80 );
   value = SPI_transfer( 0x00 );
   MFRC522_CS = 1;
-  printf("%d    ",(int)value);
   return value;
 }
-static void MFRC522_Clear_Bit( char addr, char mask )
+void MFRC522_Clear_Bit( char addr, char mask )
 {
   MFRC522_Wr( addr, MFRC522_Rd( addr ) & (~mask) );
 }
-static void MFRC522_Set_Bit( char addr, char mask )
+void MFRC522_Set_Bit( char addr, char mask )
 {
   MFRC522_Wr( addr, MFRC522_Rd( addr ) | mask );
 }
@@ -491,9 +495,103 @@ char MFRC522_ReadCardSerial( char *str )
     return 0;
 }
 
-
-//char key[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-//char writeData[] = "Microcontrolandos";
+/******************************************************************************/
+//unsigned char EEPROM_write(unsigned char address,unsigned char data)
+//{
+//    address &= ~(0x80);
+//    EEADR = address;
+//    EEDATA = data;
+//
+//    EECON1bits.WREN = 1;
+//    EECON1bits.WR = 1;
+//    while(EECON1bits.WR);
+//
+//    return EECON1bits.WRERR;
+//}
+//unsigned char EEPROM_read(unsigned char address)
+//{
+//   address &= ~(0x80);
+//   EEADR = address;
+//   EECON1bits.RD = 1;
+//   while(EECON1bits.RD);
+//   return EEDATA;
+//}
+/******************************************************************************/
+char compare_card(char *card)
+{
+    //Primeiro byte da eeprom guarda o endereço do ultimo byte valido de nº de cartões
+    char index = eeprom_read(0);
+    if(index == 0x01 || index == 0xff) return 0;//Sem cartões cadastrados
+    for(char i=1;i<index;i+=4)
+    {
+        if(*card == eeprom_read(i) &&
+           *(card+1) == eeprom_read(i+1) &&
+           *(card+2) == eeprom_read(i+2) &&
+           *(card+3) == eeprom_read(i+3))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+void record_card(char *card)
+{
+    char index = eeprom_read(0);
+    if(index == 0xff)
+    {
+        eeprom_write(0,1);
+        index = 1;
+    }
+        eeprom_write(index,*card);
+        eeprom_write(index+1,*(card+1));
+        eeprom_write(index+2,*(card+2));
+        eeprom_write(index+3,*(card+3));
+        eeprom_write(0,index+4);
+}
+void clear_list_cards()
+{
+    eeprom_write(0,1);
+}
+/******************************************************************************/
+/******************************************************************************/
+//void set_CCP1(int val)
+//{
+//    char* p;
+//    p = &val;
+//    CCPR1L = *p;
+//    CCPR1H = *(p+1);
+//}
+//void SERVO_init()
+//{
+//    T1CONbits.RD16 = 1;
+//    T1CONbits.TMR1ON = 1;
+//    TMR1 = TMR1_20MS;          //Interromper a cada 20ms;
+//    GIE = 1;
+//    PEIE = 1;
+//    TMR1IE = 1;
+//
+//    //Modulo CCP(compara??o)
+//    CCP1CON = 0x0a;     //force o pino para nivel baixo
+//    TRISCbits.TRISC2 = 0;
+////    CCP1CONbits.CCP1M3 = 1;
+////    CCP1CONbits.CCP1M0 = 1;
+//    CCP1IE = 1;
+//    set_CCP1(TMR1_20MS+1000);
+////    CCPR1 = 0;
+//
+//
+//}
+//void SERVO_write(int val)
+//{
+//    int angle = 1000;   //Valor inicial para servo(1ms)
+//    if(val<=1000)
+//    {
+//        angle = val+1000;
+//        set_CCP1(TMR1_20MS+angle);
+//    }
+//}
+/******************************************************************************/
+char num=0;
 void main()
 {
   char UID[6];
@@ -506,43 +604,77 @@ void main()
 
   //inicializa o modulo RFID
   MFRC522_Init();
-
   
   TRIS_LED1 = 0;
+  TRIS_BUTTON = 1;
+  TRIS_OUTPUT1 = 0;
   for(int i=0;i<10;i++)
   {
-      printf("Ola mundo!");
       LED1 = 1;
-      __delay_ms(100);
+      __delay_ms(250);
       LED1 = 0;
-      __delay_ms(100);
+      __delay_ms(250);
   }
   while(1)
   {
-      printf(".");
-//      LED1 = ~LED1;
-//      for(int i = 0;i<10;i++)__delay_ms(250);
+      if(BUTTON == 0)
+      {
+          num++;
+      }
+      if(num==8)
+      {
+          clear_list_cards();
+          printf("Lista apagada\n\r");
+          num=0;
+          LED1 = 1;
+          for(char i=0;i<10;i++)__delay_ms(100);
+          LED1 = 0;
+      }
+      //Letura
     if( MFRC522_isCard( &TagType ) )
     {
       //Exibe o tipo do cartão no display
-      printf("Tipo de Tag: %u",TagType);
+      printf("Tipo de Tag: %u\n\r",TagType);
       //Faz a leitura do numero de serie
       if( MFRC522_ReadCardSerial( UID ) )
       {
-          LED1 = 0;
+        //Só mostra que um cartão foi lido
+        LED1 = 1;
         printf("Codigo: ");
         for(int i=0; i < 5; i++)
         {
-          printf("%d",(int)UID[i]);
-          printf(" ");
+            printf("%X ",UID[i]);
         }
-        printf("\n");
-        size = MFRC522_SelectTag( UID );
+        printf("\n\r");
+
+        //Gravação
+        if(BUTTON == 0)
+        {
+            record_card(UID);
+            num = 0;
+            printf("Cartão cadastrado\n\r");
+            LED1=1;
+            __delay_ms(250);
+            LED1=0;
+        }
+        //Comparação
+        if(compare_card(UID))
+        {
+            OUTPUT1=1;
+            printf("Cartão reconhecido!\n\r");
+            for(char i=0;i<8;i++)__delay_ms(250);//2 segundos
+            OUTPUT1=0;
+        }
+        else
+        {
+            printf("Cadastre o cartão\n\r");
+        }
+//        size = MFRC522_SelectTag( UID );
       }
       //Estado de hibernação
       //MFRC522_Halt();
     }
-    LED1 = 1;
+    LED1 = 0;
     __delay_ms(250);
   }
 }

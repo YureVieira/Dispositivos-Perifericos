@@ -899,16 +899,6 @@ char buffer[16];
 int count=0;
 void putch(char data)
 {
-if(data == 10)
-{
-while(!TXIF)
-continue;
-TXREG = 10;
-while(!TXIF)
-continue;
-TXREG = 13;
-return;
-}
 while(!TXIF)
 continue;
 TXREG = data;
@@ -978,77 +968,68 @@ PORTB |= (1<<7);
 else
 PORTB &= ~(1<<7);
 }
+
 unsigned char SPI_transfer(unsigned char data)
 {
-unsigned char ret;
+unsigned char byte;
+byte = data;
 if(_mode==1 || _mode==3)
 {
 for(int i=0;i<8;i++)
 {
-
-if(data & 0x80)PORTB |= (1<<6);
+if(byte & 0x80) PORTB |= (1<<6);
 else PORTB &= ~(1<<6);
-
-PORTB ^= (1<<7);
-if(PORTB & (1<<5))ret|=1;
 _delay((unsigned long)((10)*(16000000/4000000.0)));
 PORTB ^= (1<<7);
-
-ret<<=1;
-data<<=1;
+byte <<= 1;
+if((PORTB & (1<<5))) byte |= 0x01;
 _delay((unsigned long)((10)*(16000000/4000000.0)));
+PORTB ^= (1<<7);
 }
 }
 else
 {
-unsigned char ret;
 for(int i=0;i<8;i++)
 {
-
-if(PORTB & (1<<5))ret|=1;
-PORTB ^= (1<<7);
-
-
-if(data & 0x80)PORTB |= (1<<6);
+if(byte & 0x80)PORTB |= (1<<6);
 else PORTB &= ~(1<<6);
+byte <<= 1;
 _delay((unsigned long)((10)*(16000000/4000000.0)));
 PORTB ^= (1<<7);
-
-ret<<=1;
-data<<=1;
+if((PORTB & (1<<5))) byte |= 0x01;
 _delay((unsigned long)((10)*(16000000/4000000.0)));
+PORTB ^= (1<<7);
 }
 }
-return ret;
+return byte;
 }
 
 # 5 "SPI.h"
 void SPI_init(unsigned char mode);
 unsigned char SPI_transfer(unsigned char data);
 
-# 124 "main.c"
-static void MFRC522_Wr( char addr, char value )
+# 129 "main.c"
+void MFRC522_Wr( char addr, char value )
 {
 PORTAbits.RA1 = 0;
 SPI_transfer( ( addr << 1 ) & 0x7E );
 SPI_transfer( value );
 PORTAbits.RA1 = 1;
 }
-static char MFRC522_Rd( char addr )
+char MFRC522_Rd( char addr )
 {
 char value;
 PORTAbits.RA1 = 0;
 SPI_transfer( (( addr << 1 ) & 0x7E) | 0x80 );
 value = SPI_transfer( 0x00 );
 PORTAbits.RA1 = 1;
-printf("%d    ",(int)value);
 return value;
 }
-static void MFRC522_Clear_Bit( char addr, char mask )
+void MFRC522_Clear_Bit( char addr, char mask )
 {
 MFRC522_Wr( addr, MFRC522_Rd( addr ) & (~mask) );
 }
-static void MFRC522_Set_Bit( char addr, char mask )
+void MFRC522_Set_Bit( char addr, char mask )
 {
 MFRC522_Wr( addr, MFRC522_Rd( addr ) | mask );
 }
@@ -1375,7 +1356,7 @@ _status = 2;
 return _status;
 }
 
-# 476
+# 480
 char MFRC522_isCard( char *TagType )
 {
 if (MFRC522_Request( 0x26, TagType ) == 0)
@@ -1394,9 +1375,45 @@ else
 return 0;
 }
 
+# 520
+char compare_card(char *card)
+{
 
+char index = eeprom_read(0);
+if(index == 0x01 || index == 0xff) return 0;
+for(char i=1;i<index;i+=4)
+{
+if(*card == eeprom_read(i) &&
+*(card+1) == eeprom_read(i+1) &&
+*(card+2) == eeprom_read(i+2) &&
+*(card+3) == eeprom_read(i+3))
+{
+return 1;
+}
+}
+return 0;
+}
+void record_card(char *card)
+{
+char index = eeprom_read(0);
+if(index == 0xff)
+{
+eeprom_write(0,1);
+index = 1;
+}
+eeprom_write(index,*card);
+eeprom_write(index+1,*(card+1));
+eeprom_write(index+2,*(card+2));
+eeprom_write(index+3,*(card+3));
+eeprom_write(0,index+4);
+}
+void clear_list_cards()
+{
+eeprom_write(0,1);
+}
 
-
+# 594
+char num=0;
 void main()
 {
 char UID[6];
@@ -1410,42 +1427,76 @@ SPI_init(0);
 
 MFRC522_Init();
 
-
 TRISBbits.TRISB3 = 0;
+TRISBbits.TRISB4 = 1;
+TRISBbits.TRISB0 = 0;
 for(int i=0;i<10;i++)
 {
-printf("Ola mundo!");
 PORTBbits.RB3 = 1;
-_delay((unsigned long)((100)*(16000000/4000.0)));
+_delay((unsigned long)((250)*(16000000/4000.0)));
 PORTBbits.RB3 = 0;
-_delay((unsigned long)((100)*(16000000/4000.0)));
+_delay((unsigned long)((250)*(16000000/4000.0)));
 }
 while(1)
 {
-printf(".");
-
+if(PORTBbits.RB4 == 0)
+{
+num++;
+}
+if(num==8)
+{
+clear_list_cards();
+printf("Lista apagada\n\r");
+num=0;
+PORTBbits.RB3 = 1;
+for(char i=0;i<10;i++)_delay((unsigned long)((100)*(16000000/4000.0)));
+PORTBbits.RB3 = 0;
+}
 
 if( MFRC522_isCard( &TagType ) )
 {
 
-printf("Tipo de Tag: %u",TagType);
+printf("Tipo de Tag: %u\n\r",TagType);
 
 if( MFRC522_ReadCardSerial( UID ) )
 {
-PORTBbits.RB3 = 0;
+
+PORTBbits.RB3 = 1;
 printf("Codigo: ");
 for(int i=0; i < 5; i++)
 {
-printf("%d",(int)UID[i]);
-printf(" ");
+printf("%X ",UID[i]);
 }
-printf("\n");
-size = MFRC522_SelectTag( UID );
+printf("\n\r");
+
+
+if(PORTBbits.RB4 == 0)
+{
+record_card(UID);
+num = 0;
+printf("Cartão cadastrado\n\r");
+PORTBbits.RB3=1;
+_delay((unsigned long)((250)*(16000000/4000.0)));
+PORTBbits.RB3=0;
+}
+
+if(compare_card(UID))
+{
+PORTBbits.RB0=1;
+printf("Cartão reconhecido!\n\r");
+for(char i=0;i<8;i++)_delay((unsigned long)((250)*(16000000/4000.0)));
+PORTBbits.RB0=0;
+}
+else
+{
+printf("Cadastre o cartão\n\r");
+}
+
 }
 
 
 }
-PORTBbits.RB3 = 1;
+PORTBbits.RB3 = 0;
 _delay((unsigned long)((250)*(16000000/4000.0)));
 }
 }
