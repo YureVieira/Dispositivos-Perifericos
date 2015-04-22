@@ -496,27 +496,6 @@ char MFRC522_ReadCardSerial( char *str )
 }
 
 /******************************************************************************/
-//unsigned char EEPROM_write(unsigned char address,unsigned char data)
-//{
-//    address &= ~(0x80);
-//    EEADR = address;
-//    EEDATA = data;
-//
-//    EECON1bits.WREN = 1;
-//    EECON1bits.WR = 1;
-//    while(EECON1bits.WR);
-//
-//    return EECON1bits.WRERR;
-//}
-//unsigned char EEPROM_read(unsigned char address)
-//{
-//   address &= ~(0x80);
-//   EEADR = address;
-//   EECON1bits.RD = 1;
-//   while(EECON1bits.RD);
-//   return EEDATA;
-//}
-/******************************************************************************/
 char compare_card(char *card)
 {
     //Primeiro byte da eeprom guarda o endereço do ultimo byte valido de nº de cartões
@@ -553,44 +532,10 @@ void clear_list_cards()
     eeprom_write(0,1);
 }
 /******************************************************************************/
-/******************************************************************************/
-//void set_CCP1(int val)
-//{
-//    char* p;
-//    p = &val;
-//    CCPR1L = *p;
-//    CCPR1H = *(p+1);
-//}
-//void SERVO_init()
-//{
-//    T1CONbits.RD16 = 1;
-//    T1CONbits.TMR1ON = 1;
-//    TMR1 = TMR1_20MS;          //Interromper a cada 20ms;
-//    GIE = 1;
-//    PEIE = 1;
-//    TMR1IE = 1;
-//
-//    //Modulo CCP(compara??o)
-//    CCP1CON = 0x0a;     //force o pino para nivel baixo
-//    TRISCbits.TRISC2 = 0;
-////    CCP1CONbits.CCP1M3 = 1;
-////    CCP1CONbits.CCP1M0 = 1;
-//    CCP1IE = 1;
-//    set_CCP1(TMR1_20MS+1000);
-////    CCPR1 = 0;
-//
-//
-//}
-//void SERVO_write(int val)
-//{
-//    int angle = 1000;   //Valor inicial para servo(1ms)
-//    if(val<=1000)
-//    {
-//        angle = val+1000;
-//        set_CCP1(TMR1_20MS+angle);
-//    }
-//}
-/******************************************************************************/
+
+/******************************************************************************
+						Rotina principal
+*******************************************************************************/
 char num=0;
 void main()
 {
@@ -633,7 +578,7 @@ void main()
       //Letura
     if( MFRC522_isCard( &TagType ) )
     {
-      //Exibe o tipo do cartão no display
+      //Exibe o tipo do cartão na serial
       printf("Tipo de Tag: %u\n\r",TagType);
       //Faz a leitura do numero de serie
       if( MFRC522_ReadCardSerial( UID ) )
